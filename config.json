@@ -1,0 +1,14 @@
+{
+  "translation_engine": "datpmt",
+  "api_endpoint": "https://libretranslate.com",
+  "api_key": "",
+  "source_lang": "auto",
+  "target_lang": "es",
+  "output_suffix": "_{lang}",
+  "output_dir": "",
+  "cache_enabled": true,
+  "batch_size": 10,
+  "timeout": 30,
+  "max_retries": 3,
+  "retry_delay": 1.5
+}

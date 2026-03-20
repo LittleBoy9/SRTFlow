@@ -1,0 +1,4 @@
+{
+  "_comment": "Add terms that should never be translated. Key = source text, Value = replacement.",
+  "terms": {}
+}
