@@ -5,7 +5,7 @@ Supports DatPMT, LibreTranslate, DeepL, and Google Translate engines.
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
     QLineEdit, QCheckBox, QLabel,
@@ -23,12 +23,14 @@ _ENGINE_FIELDS = {
     "libretranslate": {"endpoint": True,  "api_key": True},
     "deepl":          {"endpoint": False, "api_key": True},
     "google":         {"endpoint": False, "api_key": True},
+    "claude":         {"endpoint": False, "api_key": True},
 }
 
 _ENGINE_PLACEHOLDERS = {
     "libretranslate": {"endpoint": "https://libretranslate.com", "api_key": "Leave blank for free tier"},
     "deepl":          {"endpoint": "", "api_key": "DeepL API key (free keys end with :fx)"},
     "google":         {"endpoint": "", "api_key": "Google Cloud Translation API key"},
+    "claude":         {"endpoint": "", "api_key": "Anthropic API key (sk-ant-...)"},
 }
 
 
@@ -49,7 +51,7 @@ class SettingsPanel(QWidget):
         root.setSpacing(0)
 
         # Toggle header
-        self._toggle_btn = QPushButton("⚙  API Settings", self)
+        self._toggle_btn = QPushButton("▸  API Settings", self)
         self._toggle_btn.setProperty("role", "ghost")
         self._toggle_btn.setStyleSheet(f"""
             QPushButton {{
@@ -84,6 +86,7 @@ class SettingsPanel(QWidget):
         # Engine selector
         engine_label = SectionLabel("Translation Engine")
         self._engine_combo = QComboBox()
+        self._engine_combo.setFixedHeight(42)
         for code, display in ENGINES.items():
             self._engine_combo.addItem(display, userData=code)
         saved_engine = self.config.get("translation_engine", "datpmt")
@@ -102,6 +105,7 @@ class SettingsPanel(QWidget):
         self._key_label = SectionLabel("API Key")
         self._key_edit = QLineEdit(self.config.get("api_key", ""))
         self._key_edit.setPlaceholderText("API key")
+        self._key_edit.setFixedHeight(42)
         self._key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self._key_edit.textChanged.connect(lambda v: self.config.set("api_key", v))
 
@@ -118,6 +122,7 @@ class SettingsPanel(QWidget):
         ep_row = QHBoxLayout()
         self._endpoint_edit = QLineEdit(self.config.get("api_endpoint", "https://libretranslate.com"))
         self._endpoint_edit.setPlaceholderText("https://libretranslate.com")
+        self._endpoint_edit.setFixedHeight(42)
         self._endpoint_edit.textChanged.connect(self._on_endpoint_changed)
 
         self._test_btn = QPushButton("Test")
@@ -191,9 +196,28 @@ class SettingsPanel(QWidget):
 
     def _toggle(self):
         self._expanded = not self._expanded
-        self._content.setVisible(self._expanded)
-        icon = "▾" if self._expanded else "⚙"
+        icon = "▾" if self._expanded else "▸"
         self._toggle_btn.setText(f"{icon}  API Settings")
+
+        if self._expanded:
+            self._content.setVisible(True)
+            self._content.setMaximumHeight(0)
+            anim = QPropertyAnimation(self._content, b"maximumHeight")
+            anim.setDuration(T.ANIM_NORMAL)
+            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            anim.setStartValue(0)
+            anim.setEndValue(500)  # generous max to fit all engines
+            anim.start()
+            self._anim = anim
+        else:
+            anim = QPropertyAnimation(self._content, b"maximumHeight")
+            anim.setDuration(T.ANIM_NORMAL)
+            anim.setEasingCurve(QEasingCurve.Type.InCubic)
+            anim.setStartValue(self._content.maximumHeight())
+            anim.setEndValue(0)
+            anim.finished.connect(lambda: self._content.setVisible(False) if not self._expanded else None)
+            anim.start()
+            self._anim = anim
 
     def _on_engine_changed(self):
         engine = self._engine_combo.currentData()
@@ -217,6 +241,8 @@ class SettingsPanel(QWidget):
                 self._key_label.setText("DeepL API Key")
             elif engine == "google":
                 self._key_label.setText("Google API Key")
+            elif engine == "claude":
+                self._key_label.setText("Anthropic API Key")
             else:
                 self._key_label.setText("API Key (optional)")
 
@@ -230,6 +256,7 @@ class SettingsPanel(QWidget):
             "libretranslate": "Free tier or self-hosted. Set a custom endpoint for your own instance.",
             "deepl": "Industry-leading translation quality. Get a free API key at deepl.com/pro.",
             "google": "Widest language coverage. Requires a Google Cloud Translation API key.",
+            "claude": "AI-powered context-aware translation. Handles idioms and tone naturally. Get a key at console.anthropic.com.",
         }
         self._engine_info.setText(info_map.get(engine, ""))
 

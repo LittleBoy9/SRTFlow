@@ -52,7 +52,7 @@ class FileOutputPanel(QWidget):
 
         self._browse_btn = QPushButton("Change")
         self._browse_btn.setFixedHeight(32)
-        self._browse_btn.setFixedWidth(72)
+        self._browse_btn.setMinimumWidth(80)
         self._browse_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {T.SURFACE_3};

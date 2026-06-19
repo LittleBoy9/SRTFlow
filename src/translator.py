@@ -21,44 +21,63 @@ ENGINES = {
     "libretranslate": "LibreTranslate",
     "deepl":          "DeepL (API key required)",
     "google":         "Google Translate (API key required)",
+    "claude":         "Claude AI (API key required)",
 }
 
 # Languages (display name → code)
 LANGUAGES: Dict[str, str] = {
-    "Auto Detect":  "auto",
-    "Arabic":       "ar",
-    "Azerbaijani":  "az",
-    "Catalan":      "ca",
-    "Chinese":      "zh",
-    "Czech":        "cs",
-    "Danish":       "da",
-    "Dutch":        "nl",
-    "English":      "en",
-    "Esperanto":    "eo",
-    "Finnish":      "fi",
-    "French":       "fr",
-    "German":       "de",
-    "Greek":        "el",
-    "Hebrew":       "he",
-    "Hindi":        "hi",
-    "Hungarian":    "hu",
-    "Indonesian":   "id",
-    "Irish":        "ga",
-    "Italian":      "it",
-    "Japanese":     "ja",
-    "Korean":       "ko",
-    "Persian":      "fa",
-    "Polish":       "pl",
-    "Portuguese":   "pt",
-    "Romanian":     "ro",
-    "Russian":      "ru",
-    "Slovak":       "sk",
-    "Spanish":      "es",
-    "Swedish":      "sv",
-    "Thai":         "th",
-    "Turkish":      "tr",
-    "Ukrainian":    "uk",
-    "Vietnamese":   "vi",
+    "Auto Detect":           "auto",
+    "Arabic (العربية)":      "ar",
+    "Assamese (অসমীয়া)":    "as",
+    "Azerbaijani (Azərbaycanca)": "az",
+    "Bengali (বাংলা)":      "bn",
+    "Catalan (Català)":      "ca",
+    "Chinese (中文)":         "zh",
+    "Czech (Čeština)":       "cs",
+    "Danish (Dansk)":        "da",
+    "Dogri (डोगरी)":         "doi",
+    "Dutch (Nederlands)":    "nl",
+    "English":               "en",
+    "Esperanto":             "eo",
+    "Finnish (Suomi)":       "fi",
+    "French (Français)":     "fr",
+    "German (Deutsch)":      "de",
+    "Greek (Ελληνικά)":      "el",
+    "Gujarati (ગુજરાતી)":   "gu",
+    "Hebrew (עברית)":        "he",
+    "Hindi (हिन्दी)":         "hi",
+    "Hungarian (Magyar)":    "hu",
+    "Indonesian (Bahasa)":   "id",
+    "Irish (Gaeilge)":       "ga",
+    "Italian (Italiano)":    "it",
+    "Japanese (日本語)":      "ja",
+    "Kannada (ಕನ್ನಡ)":       "kn",
+    "Konkani (कोंकणी)":      "gom",
+    "Korean (한국어)":         "ko",
+    "Maithili (मैथिली)":     "mai",
+    "Malayalam (മലയാളം)":    "ml",
+    "Manipuri (ꯃꯤꯇꯩꯂꯣꯟ)":    "mni-Mtei",
+    "Marathi (मराठी)":       "mr",
+    "Nepali (नेपाली)":       "ne",
+    "Odia (ଓଡ଼ିଆ)":          "or",
+    "Persian (فارسی)":       "fa",
+    "Polish (Polski)":       "pl",
+    "Portuguese (Português)": "pt",
+    "Punjabi (ਪੰਜਾਬੀ)":      "pa",
+    "Romanian (Română)":     "ro",
+    "Russian (Русский)":     "ru",
+    "Sanskrit (संस्कृतम्)":   "sa",
+    "Sindhi (سنڌي)":         "sd",
+    "Slovak (Slovenčina)":   "sk",
+    "Spanish (Español)":     "es",
+    "Swedish (Svenska)":     "sv",
+    "Tamil (தமிழ்)":          "ta",
+    "Telugu (తెలుగు)":        "te",
+    "Thai (ไทย)":             "th",
+    "Turkish (Türkçe)":      "tr",
+    "Ukrainian (Українська)": "uk",
+    "Urdu (اردو)":           "ur",
+    "Vietnamese (Tiếng Việt)": "vi",
 }
 
 LANG_CODE_TO_NAME: Dict[str, str] = {v: k for k, v in LANGUAGES.items() if v != "auto"}
@@ -492,13 +511,166 @@ class GoogleTranslateClient:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Claude AI Client (Anthropic API, context-aware translation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ClaudeClient:
+    """
+    Uses the Anthropic Claude API for context-aware subtitle translation.
+    Sends surrounding lines as context for better idiom and tone handling.
+    Requires an Anthropic API key.
+    """
+
+    def __init__(
+        self,
+        api_key: str = "",
+        model: str = "claude-haiku-4-5-20251001",
+        timeout: int = 60,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
+        **_kwargs,
+    ):
+        self.api_key = api_key
+        self.model = model
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.detected_language: Optional[str] = None
+        self._session = requests.Session()
+        self._session.headers.update({
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        })
+
+    def translate(self, text: str, source: str, target: str) -> str:
+        if not text.strip():
+            return text
+        results = self.translate_batch([text], source, target)
+        return results[0]
+
+    def translate_batch(self, texts: List[str], source: str, target: str) -> List[str]:
+        if not texts:
+            return []
+
+        non_empty = [(i, t) for i, t in enumerate(texts) if t.strip()]
+        if not non_empty:
+            return texts[:]
+
+        src_name = LANG_CODE_TO_NAME.get(source, source) if source != "auto" else "auto-detected"
+        tgt_name = LANG_CODE_TO_NAME.get(target, target)
+
+        # Build prompt with numbered lines for reliable parsing
+        lines_block = "\n".join(f"[{idx+1}] {t}" for idx, (_, t) in enumerate(non_empty))
+
+        prompt = (
+            f"Translate the following subtitle lines from {src_name} to {tgt_name}.\n"
+            f"Rules:\n"
+            f"- Return ONLY the translated lines, one per numbered tag [1], [2], etc.\n"
+            f"- Preserve the original tone, register, and intent.\n"
+            f"- Keep it natural for subtitles (concise, spoken language).\n"
+            f"- Do NOT add explanations or notes.\n"
+            f"- If a line is already in the target language, return it unchanged.\n\n"
+            f"{lines_block}"
+        )
+
+        last_error: Optional[Exception] = None
+        for attempt in range(self.max_retries):
+            try:
+                payload = {
+                    "model": self.model,
+                    "max_tokens": 4096,
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+
+                resp = self._session.post(
+                    "https://api.anthropic.com/v1/messages",
+                    json=payload,
+                    timeout=self.timeout,
+                )
+
+                if resp.status_code == 429:
+                    wait = self.retry_delay * (2 ** attempt)
+                    logger.warning("Claude rate limited. Waiting %.1fs", wait)
+                    time.sleep(wait)
+                    continue
+                if resp.status_code == 401:
+                    raise TranslationError("Claude: Invalid API key.")
+                if resp.status_code == 403:
+                    raise TranslationError("Claude: Access denied. Check your API key permissions.")
+                resp.raise_for_status()
+
+                data = resp.json()
+                content = data.get("content", [])
+                reply_text = ""
+                for block in content:
+                    if block.get("type") == "text":
+                        reply_text += block.get("text", "")
+
+                # Parse numbered responses
+                translated_map = self._parse_response(reply_text, len(non_empty))
+
+                results = list(texts)
+                for seq_idx, (orig_idx, orig_text) in enumerate(non_empty):
+                    results[orig_idx] = translated_map.get(seq_idx + 1, orig_text)
+
+                return results
+
+            except TranslationError:
+                raise
+            except requests.RequestException as e:
+                last_error = e
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay * (2 ** attempt))
+
+        raise TranslationError(f"Claude translation failed after {self.max_retries} attempts: {last_error}")
+
+    @staticmethod
+    def _parse_response(text: str, expected_count: int) -> Dict[int, str]:
+        """Parse numbered [1] ... [2] ... responses from Claude."""
+        import re
+        result: Dict[int, str] = {}
+        # Match [N] followed by the translated text
+        pattern = re.compile(r"\[(\d+)\]\s*(.*?)(?=\[\d+\]|\Z)", re.DOTALL)
+        for match in pattern.finditer(text):
+            num = int(match.group(1))
+            translated = match.group(2).strip()
+            if translated:
+                result[num] = translated
+
+        # Fallback: if no numbered tags found, split by newlines
+        if not result:
+            lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
+            for i, line in enumerate(lines[:expected_count], 1):
+                result[i] = line
+
+        return result
+
+    def test_connection(self) -> bool:
+        try:
+            payload = {
+                "model": self.model,
+                "max_tokens": 10,
+                "messages": [{"role": "user", "content": "Say 'ok'"}],
+            }
+            resp = self._session.post(
+                "https://api.anthropic.com/v1/messages",
+                json=payload,
+                timeout=10,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Factory — create the right client from config
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_client(engine: str = "datpmt", **kwargs):
     """
     Factory to create the appropriate translation client.
-    engine: "datpmt" | "libretranslate" | "deepl" | "google"
+    engine: "datpmt" | "libretranslate" | "deepl" | "google" | "claude"
     """
     if engine == "libretranslate":
         return LibreTranslateClient(**kwargs)
@@ -506,5 +678,7 @@ def create_client(engine: str = "datpmt", **kwargs):
         return DeepLClient(**kwargs)
     elif engine == "google":
         return GoogleTranslateClient(**kwargs)
+    elif engine == "claude":
+        return ClaudeClient(**kwargs)
     else:
         return DatPMTClient(**kwargs)

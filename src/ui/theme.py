@@ -1,5 +1,5 @@
 """
-Design tokens — colors, fonts, spacing, animations.
+Design tokens — colors, fonts, spacing, animations, shadows.
 Single source of truth for SRTFlow's visual identity.
 """
 
@@ -8,14 +8,17 @@ BG          = "#0c0c0e"
 SURFACE     = "#151518"
 SURFACE_2   = "#1c1c21"
 SURFACE_3   = "#232329"
+SURFACE_4   = "#2c2c34"   # elevated surfaces
 BORDER      = "#2a2a32"
 BORDER_FOCUS= "#4f9cf9"
+BORDER_HOVER= "#3a3a46"
 
 TEXT_1      = "#f2f2f7"   # primary
 TEXT_2      = "#8e8e9e"   # secondary
-TEXT_3      = "#4a4a5a"   # muted / placeholder
+TEXT_3      = "#55556a"   # muted / placeholder (improved contrast from #4a4a5a)
 
 ACCENT      = "#4f9cf9"
+ACCENT_HOVER= "#6cb0ff"
 ACCENT_DARK = "#1a4a8a"
 ACCENT_GLOW = "rgba(79,156,249,0.18)"
 
@@ -29,14 +32,33 @@ INFO        = "#4f9cf9"
 INFO_BG     = "rgba(79,156,249,0.12)"
 
 # ── Typography ──────────────────────────────────────────────────────────────
-FONT_FAMILY = '"SF Pro Display", "Segoe UI Variable", "Inter", system-ui, sans-serif'
-FONT_MONO   = '"SF Mono", "Cascadia Code", "Fira Code", monospace'
+import sys as _sys
+
+if _sys.platform == "darwin":
+    FONT_FAMILY = '"Helvetica Neue"'
+    FONT_MONO   = '"Menlo"'
+elif _sys.platform == "win32":
+    FONT_FAMILY = '"Segoe UI"'
+    FONT_MONO   = '"Consolas"'
+else:
+    FONT_FAMILY = '"Arial"'
+    FONT_MONO   = '"DejaVu Sans Mono"'
 
 # ── Spacing ─────────────────────────────────────────────────────────────────
 RADIUS_SM   = "6px"
 RADIUS_MD   = "10px"
 RADIUS_LG   = "14px"
 RADIUS_XL   = "18px"
+
+# ── Shadows ─────────────────────────────────────────────────────────────────
+SHADOW_SM   = "0 2px 8px rgba(0,0,0,0.3)"
+SHADOW_MD   = "0 4px 16px rgba(0,0,0,0.4)"
+SHADOW_LG   = "0 8px 32px rgba(0,0,0,0.5)"
+
+# ── Animation durations (ms) ───────────────────────────────────────────────
+ANIM_FAST   = 150
+ANIM_NORMAL = 250
+ANIM_SLOW   = 400
 
 # ── Master stylesheet ────────────────────────────────────────────────────────
 STYLESHEET = f"""

@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Dict
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
@@ -60,7 +60,7 @@ class GlossaryEditor(QWidget):
         root.setSpacing(0)
 
         # Toggle header
-        self._toggle_btn = QPushButton("📖  Glossary", self)
+        self._toggle_btn = QPushButton("▸  Glossary", self)
         self._toggle_btn.setProperty("role", "ghost")
         self._toggle_btn.setStyleSheet(f"""
             QPushButton {{
@@ -95,6 +95,15 @@ class GlossaryEditor(QWidget):
         desc.setStyleSheet(f"color: {T.TEXT_3}; font-size: 11px; background: transparent;")
         desc.setWordWrap(True)
         card_layout.addWidget(desc)
+
+        # Empty state hint
+        self._empty_hint = QLabel("No glossary terms yet — add your first term below")
+        self._empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint.setStyleSheet(f"""
+            color: {T.TEXT_3}; font-size: 11px; background: {T.SURFACE};
+            border: 1px dashed {T.BORDER}; border-radius: 8px; padding: 16px;
+        """)
+        card_layout.addWidget(self._empty_hint)
 
         # Search bar
         self._search = QLineEdit()
@@ -208,14 +217,44 @@ class GlossaryEditor(QWidget):
 
     def _toggle(self):
         self._expanded = not self._expanded
-        self._content.setVisible(self._expanded)
-        icon = "▾" if self._expanded else "📖"
+        icon = "▾" if self._expanded else "▸"
         self._toggle_btn.setText(f"{icon}  Glossary")
+
+        # Update badge
+        count = len(self._terms)
+        if count and not self._expanded:
+            self._toggle_btn.setText(f"▸  Glossary  ({count} term{'s' if count != 1 else ''})")
+
+        if self._expanded:
+            self._content.setVisible(True)
+            self._content.setMaximumHeight(0)
+            anim = QPropertyAnimation(self._content, b"maximumHeight")
+            anim.setDuration(T.ANIM_NORMAL)
+            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            anim.setStartValue(0)
+            anim.setEndValue(self._content.sizeHint().height() + 100)
+            anim.start()
+            self._anim = anim
+        else:
+            anim = QPropertyAnimation(self._content, b"maximumHeight")
+            anim.setDuration(T.ANIM_NORMAL)
+            anim.setEasingCurve(QEasingCurve.Type.InCubic)
+            anim.setStartValue(self._content.maximumHeight())
+            anim.setEndValue(0)
+            anim.finished.connect(lambda: self._content.setVisible(False) if not self._expanded else None)
+            anim.start()
+            self._anim = anim
 
     def _refresh_table(self, filter_text: str = ""):
         ft = filter_text.lower()
         items = [(k, v) for k, v in sorted(self._terms.items())
                  if not ft or ft in k.lower() or ft in v.lower()]
+
+        has_terms = len(self._terms) > 0
+        self._empty_hint.setVisible(not has_terms)
+        self._table.setVisible(has_terms)
+        self._search.setVisible(has_terms)
+
         self._table.setRowCount(len(items))
         for row, (find, repl) in enumerate(items):
             self._table.setItem(row, 0, QTableWidgetItem(find))

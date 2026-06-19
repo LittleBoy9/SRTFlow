@@ -8,10 +8,11 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QApplication,
+    QApplication, QGraphicsDropShadowEffect,
 )
 
 from . import theme as T
@@ -164,6 +165,23 @@ class PreviewDialog(QDialog):
             self._table.setItem(row, 2, trans_item)
 
         root.addWidget(self._table, 1)
+
+        # ── Summary stats ──
+        unchanged = count - changed - self._skip_count
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(16)
+        for label, value, color in [
+            ("Changed", changed, T.ACCENT),
+            ("Skipped", self._skip_count, T.WARNING),
+            ("Unchanged", unchanged, T.TEXT_3),
+        ]:
+            if value > 0:
+                stat = QLabel(f"<span style='color:{color}; font-weight:700;'>{value}</span>"
+                              f" <span style='color:{T.TEXT_3};'>{label}</span>")
+                stat.setStyleSheet("background: transparent; border: none; font-size: 12px;")
+                stats_row.addWidget(stat)
+        stats_row.addStretch()
+        root.addLayout(stats_row)
 
         # ── Action buttons ──
         btn_row = QHBoxLayout()

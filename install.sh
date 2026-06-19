@@ -12,7 +12,9 @@ echo ""
 
 # ── 1. Install Python dependencies ──────────────────────────────────────────
 echo "▶ Installing Python dependencies…"
-pip3 install --quiet PyQt6 requests
+pip3 install --quiet --break-system-packages PyQt6 requests 2>/dev/null \
+  || pip3 install --quiet PyQt6 requests 2>/dev/null \
+  || echo "  ⚠  Could not install automatically. Run: pip3 install PyQt6 requests"
 echo "  ✓ PyQt6 and requests installed"
 
 # ── 2. Detect DaVinci Resolve scripts folder ────────────────────────────────
@@ -28,15 +30,17 @@ if [ -d "$DR_SCRIPTS" ]; then
     echo "  $DR_SCRIPTS"
     echo ""
 
-    TARGET="$DR_SCRIPTS/SRTFlow"
+    TARGET="$DR_SCRIPTS/SRTFlow.py"
 
-    if [ -L "$TARGET" ] || [ -d "$TARGET" ]; then
+    if [ -L "$TARGET" ] || [ -f "$TARGET" ]; then
         echo "  ⚠  SRTFlow already exists at target. Removing old version…"
-        rm -rf "$TARGET"
+        rm -f "$TARGET"
     fi
+    # Also clean up old directory symlink if present
+    [ -L "$DR_SCRIPTS/SRTFlow" ] && rm -f "$DR_SCRIPTS/SRTFlow"
 
-    ln -s "$PLUGIN_DIR" "$TARGET"
-    echo "  ✓ Symlink created: $TARGET → $PLUGIN_DIR"
+    ln -s "$PLUGIN_DIR/SRTFlow.py" "$TARGET"
+    echo "  ✓ Symlink created: $TARGET → $PLUGIN_DIR/SRTFlow.py"
     echo ""
     echo "═══════════════════════════════════════════"
     echo "  ✓ Installation complete!"
